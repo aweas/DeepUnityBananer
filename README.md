@@ -11,6 +11,11 @@ Environment is considered solved when agent gets mean score over 13 for 100 epis
 ## Algorithm
 Agent's brain is Deep Q-network, a Reinforcement Learning algorithm which enables agent to learn via interaction with the world. Network's architecture consists of two hidden layers with 128 neurons, 37 neurons as input and 4 values as output. Value of each output corresponds to expected reward for performing the action.
 
+## Results
+Agent was able to solve the environment in as little as 468 episodes.
+
+![graph.png](graph.png)
+
 ## Installation
 #### Pre-requisites
 Packages:
