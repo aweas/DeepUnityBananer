@@ -1,7 +1,6 @@
 import numpy as np
 import random
 from collections import namedtuple, deque
-from numpy_ringbuffer import RingBuffer
 
 from tensorflow.python.framework import dtypes
 
@@ -9,7 +8,7 @@ from model import QNetworkTf
 
 import tensorflow as tf
 
-BUFFER_SIZE = int(1e4)  # replay buffer size
+BUFFER_SIZE = int(1e5)  # replay buffer size
 BATCH_SIZE = 64         # minibatch size
 GAMMA = 0.99            # discount factor
 TAU = 1e-3              # for soft update of target parameters
@@ -94,12 +93,21 @@ class Agent():
         return [tvar.assign(TAU*qvar + (1.0-TAU)*tvar) for qvar, tvar in zip(Qvars, target_vars)]
 
     def step(self, state, action, reward, next_state, done):
+        """ Stores SARS in memory for further processing and teaches agent based
+
+        Args:
+            state (array_like): state before taking action
+            action (int): taken action
+            reward (float): reward for taking action
+            next_state (array_like): state after taking action
+            done (bool): whether action ended episode
+        """
         self.memory.add(state, action, reward, next_state, done)
 
         self.t_step = (self.t_step + 1) % UPDATE_EVERY
         if self.t_step == 0:
             if len(self.memory) > BATCH_SIZE:
-                experiences = self.memory.sample(self.episode_counter/self.episode_max)
+                experiences = self.memory.sample()
                 self.learn(experiences, GAMMA)
 
     def act(self, state, mode="train"):
@@ -108,7 +116,6 @@ class Agent():
         Params
         ======
             state (array_like): current state
-            eps (float): epsilon, for epsilon-greedy action selection
             mode (str): "train" or "test", for strategy choosing
         """
         return self.sess.run(self.act_op, feed_dict={self.qnetwork_local.input: [state]})
@@ -121,16 +128,15 @@ class Agent():
             experiences (Tuple[torch.Variable]): tuple of (s, a, r, s', done) tuples 
             gamma (float): discount factor
         """
-        states, actions, rewards, next_states, dones, modifier = experiences
+        states, actions, rewards, next_states, dones = experiences
 
         q_target_output = self.qnetwork_target.forward(next_states)
         Q_targets_next = np.expand_dims(
             np.amax(q_target_output, 1), 1)
         Q_targets = rewards + (gamma*Q_targets_next*(1-dones))
 
-        loss, reduced_loss, result = self.qnetwork_local.train(states, Q_targets, actions, modifier)
+        loss, reduced_loss, result = self.qnetwork_local.train(states, Q_targets, actions)
         self._update_loss(reduced_loss)
-        self.memory.set_priority(experiences, abs(loss))
 
         self.soft_update()
 
@@ -142,82 +148,41 @@ class Agent():
             (self.learning_steps+1) + loss/(self.learning_steps+1)
         self.learning_steps += 1
 
-
 class ReplayBuffer:
-    """Fixed-size buffer to store experience tuples."""
+    """Fixed-size buffer to store experience tuples.
+    
+    Attributes:
+        action_size (int): dimension of each action
+        buffer_size (int): maximum size of buffer
+        batch_size (int): size of each training batch
+        seed (int): random seed 
+    """
 
     def __init__(self, action_size, buffer_size, batch_size, seed):
-        """Initialize a ReplayBuffer object.
-
-        Params
-        ======
-            action_size (int): dimension of each action
-            buffer_size (int): maximum size of buffer
-            batch_size (int): size of each training batch
-            seed (int): random seed
-        """
-        self.buffer_size = buffer_size
+        """Initialize a ReplayBuffer object."""
         self.action_size = action_size
-        self.filled = False
-
-        self.pointer = 0
-        # self.memory = deque(maxlen=buffer_size)
-        self.memory = np.empty((buffer_size, 5), dtype=object)
-        self.priorities = np.empty(buffer_size, dtype=np.float32)
-        # self.memory = RingBuffer(buffer_size, dtype=object)
-        # self.priorities = RingBuffer(buffer_size, dtype=np.float32)
+        self.memory = deque(maxlen=buffer_size)  
         self.batch_size = batch_size
-        self.experience = namedtuple("Experience", field_names=[
-                                     "state", "action", "reward", "next_state", "done"])
+        self.experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state", "done"])
         self.seed = random.seed(seed)
-
-        self.last_sample = None
-        self.current_beta = B
-
+    
     def add(self, state, action, reward, next_state, done):
         """Add a new experience to memory."""
         e = self.experience(state, action, np.clip(reward, -1, 1), next_state, done)
-        if e not in self.memory:
-            self.memory[self.pointer] = e
-            self.priorities[self.pointer] = 1
-            self.pointer = (self.pointer+1)%self.buffer_size
-            if self.pointer==0:
-                self.filled = True
-
-    def set_priority(self, experiences, error):
-        # indices = np.argwhere(self.memory==experiences)
-        # self.priorities[indices] = error
-        # for i, j in zip(experiences, error):
-        #     self.priorities[np.argwhere(self.memory==i)] = j
-        self.priorities[self.last_sample] = (error + E)**A
-        # pass
-
-    def sample(self, t):
+        self.memory.append(e)
+    
+    def sample(self):
         """Randomly sample a batch of experiences from memory."""
-        self.current_beta = B + t*(1-B)
+        experiences = random.sample(self.memory, k=self.batch_size)
 
-        length = len(self)
-        probs = self.priorities[:length]/np.sum(self.priorities[:length])
-        experiences = np.random.choice(length, size=self.batch_size, p=probs)
-
-        self.last_sample = experiences
-        modifier = 1/(length*probs[experiences])**self.current_beta
-
-        experiences = self.memory[experiences]
-        
-        states = np.vstack([e[0] for e in experiences if e is not None])
-        actions = np.vstack([e[1] for e in experiences if e is not None])
-        rewards = np.vstack([e[2] for e in experiences if e is not None])
-        next_states = np.vstack(
-            [e[3] for e in experiences if e is not None])
-        dones = np.vstack(
-            [e[4] for e in experiences if e is not None]).astype(np.uint8)
-
-        return (states, actions, rewards, next_states, dones, modifier)
+        states = np.vstack([e.state for e in experiences if e is not None])
+        actions = np.vstack([e.action for e in experiences if e is not None])
+        rewards = np.vstack([e.reward for e in experiences if e is not None])
+        next_states = np.vstack([e.next_state for e in experiences if e is not None])
+        dones = np.vstack([e.done for e in experiences if e is not None]).astype(np.uint8)
+  
+        return (states, actions, rewards, next_states, dones)
 
     def __len__(self):
         """Return the current size of internal memory."""
-        if self.filled:
-            return self.buffer_size
-        else:
-            return self.pointer
+        return len(self.memory)

@@ -49,7 +49,7 @@ class QNetworkTf():
             gathered = tf.expand_dims(gathered, 1)
             loss = tf.losses.mean_squared_error(
                 labels=self.y_input, predictions=gathered)
-            loss = tf.multiply(self.loss_modifier, loss)
+            # loss = tf.multiply(self.loss_modifier, loss)
             reduced_loss = tf.reduce_mean(loss)
 
             optimize = tf.train.AdamOptimizer(
@@ -62,7 +62,7 @@ class QNetworkTf():
         """Build a network that maps state -> action values."""
         return self.sess.run(self.output, feed_dict={self.input: state})
 
-    def train(self, states, y_correct, actions, modifier):
+    def train(self, states, y_correct, actions):
         ls, reduced, result, _ = self.sess.run([self.loss, self.reduced_loss, self.output, self.optimizer], feed_dict={
-            self.input: states, self.y_input: y_correct, self.gather_index: actions, self.loss_modifier: modifier})
+            self.input: states, self.y_input: y_correct, self.gather_index: actions})
         return ls, reduced, result
