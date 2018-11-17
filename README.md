@@ -1,6 +1,8 @@
 # Deep Q Unity Bananer
 Showcase of DQN implementation in Tensorflow.
 
+![Preview](insta.gif)
+
 An agent will learn the art of picking up yellow (and only yellow) bananas in a Unity environment made by Udacity.
 
 ## Environment
@@ -12,7 +14,7 @@ Environment is considered solved when agent gets mean score over 13 for 100 epis
 Agent's brain is Deep Q-network, a Reinforcement Learning algorithm which enables agent to learn via interaction with the world. Network's architecture consists of two hidden layers with 128 neurons, 37 neurons as input and 4 values as output. Value of each output corresponds to expected reward for performing the action.
 
 ## Results
-Agent was able to solve the environment in as little as 468 episodes.
+Agent was able to solve the environment in as little as 400 episodes.
 
 ![graph.png](graph.png)
 

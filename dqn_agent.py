@@ -1,12 +1,11 @@
 import numpy as np
 import random
 from collections import namedtuple, deque
-
-from tensorflow.python.framework import dtypes
+import datetime
+import tensorflow as tf
 
 from model import QNetworkTf
 
-import tensorflow as tf
 
 BUFFER_SIZE = int(1e5)  # replay buffer size
 BATCH_SIZE = 64         # minibatch size
@@ -23,7 +22,7 @@ B = 0.4
 class Agent():
     """Interacts with and learns from the environment."""
 
-    def __init__(self, network, state_size, action_size, episode_max=2000, seed=42, save=True, save_loc='models/model.ckpt', save_every=100):
+    def __init__(self, network, state_size, action_size, episode_max=2000, seed=42, save=True, save_loc='models/', save_every=100, checkpoint_file=None):
         """Initialize an Agent object.
 
         Params
@@ -40,9 +39,9 @@ class Agent():
         self.seed = random.seed(seed)
 
         self.qnetwork_local = network(
-            self.sess, state_size, action_size, "local")
+            self.sess, state_size, action_size, "local", checkpoint_file)
         self.qnetwork_target = network(
-            self.sess, state_size, action_size, "target")
+            self.sess, state_size, action_size, "target", checkpoint_file)
 
         self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
         self.t_step = 0
@@ -56,9 +55,13 @@ class Agent():
         self.eps_end = 0.0
         self.eps_decay = 0.0
 
-        self.saver = tf.train.Saver()
-        self.save_config = {'save': save,
-                            'save_loc': save_loc, 'save_every': save_every}
+        if checkpoint_file is None:
+            self.saver = tf.train.Saver()
+            self.save_config = {'save': save,
+                                'save_loc': save_loc, 'save_every': save_every}
+        else:
+            self.saver = None
+            self.save_config = None
 
         self.episode_counter = 0
         self.episode_max = episode_max
@@ -80,9 +83,11 @@ class Agent():
     def reset_episode(self):
         self.episode_counter += 1
         self.eps = max(self.eps_end, self.eps_decay*self.eps)
-
-        if self.save_config['save'] and self.episode_counter % self.save_config['save_every'] == 0:
-            self.saver.save(self.sess, "models/model.ckpt")
+        
+        if self.saver is not None:
+            if self.save_config['save'] and self.episode_counter % self.save_config['save_every'] == 0:
+                now = datetime.datetime.now()
+                self.saver.save(self.sess, self.save_config["save_loc"]+now.strftime("%Y-%m-%d_%H-%M.ckpt"))
 
     def _get_soft_update_op(self):
         Qvars = tf.get_collection(
@@ -135,7 +140,7 @@ class Agent():
             np.amax(q_target_output, 1), 1)
         Q_targets = rewards + (gamma*Q_targets_next*(1-dones))
 
-        loss, reduced_loss, result = self.qnetwork_local.train(states, Q_targets, actions)
+        reduced_loss, result = self.qnetwork_local.train(states, Q_targets, actions)
         self._update_loss(reduced_loss)
 
         self.soft_update()

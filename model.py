@@ -1,10 +1,12 @@
 import tensorflow as tf
+from tensorflow.python.saved_model import tag_constants
 import numpy as np
+
 
 class QNetworkTf():
     """Actor (Policy) Model."""
 
-    def __init__(self, session, state_size, action_size, name):
+    def __init__(self, session, state_size, action_size, name, checkpoint_file=None):
         """Initialize parameters and build model.
         Params
         ======
@@ -15,28 +17,36 @@ class QNetworkTf():
         self.sess = session
         self.name = name
 
-        self.input = tf.placeholder(tf.float32, shape=(None, state_size))
-        self.y_input = tf.placeholder(tf.float32, shape=(None, 1))
-        self.loss_modifier = tf.placeholder(tf.float32, shape=(None))
+        if checkpoint_file is None:
+            with tf.variable_scope("placeholders_"+self.name):
+                self.input = tf.placeholder(tf.float32, shape=(None, state_size), name='input')
+                self.y_input = tf.placeholder(tf.float32, shape=(None, 1), name='y_input')
+                self.gather_index = tf.placeholder(tf.int32, shape=(None), name='gather_index')
 
-        self.gather_index = tf.placeholder(tf.int32, shape=(None))
+            self.output = self._inference()
+            self.loss, self.optimizer = self._training_graph()
 
-        self.output = self._inference()
-        self.loss, self.reduced_loss, self.optimizer = self._training_graph()
+            self.sess.run([tf.global_variables_initializer(),
+                           tf.local_variables_initializer()])
+        else:
+            checkpoint_dir = '/'.join(checkpoint_file.split('/')[:-1])
+            saver = tf.train.import_meta_graph(checkpoint_file+'.meta')
+            saver.restore(self.sess, tf.train.latest_checkpoint(checkpoint_dir))
 
-        self.train_writer = tf.summary.FileWriter('models/',
-                                                  self.sess.graph)
-
-        self.sess.run([tf.global_variables_initializer(),
-                       tf.local_variables_initializer()])
+            self.input = tf.get_default_graph().get_tensor_by_name('placeholders_'+self.name+'/input:0')
+            self.y_input = tf.get_default_graph().get_tensor_by_name('placeholders_'+self.name+'/y_input:0')
+            self.gather_index = tf.get_default_graph().get_tensor_by_name('placeholders_'+self.name+'/gather_index:0')
+            self.loss = tf.get_default_graph().get_tensor_by_name(f'training_{self.name}/loss:0')
+            self.optimizer = tf.get_default_graph().get_operation_by_name(f'training_{self.name}/optimize')
+            self.output = tf.get_default_graph().get_tensor_by_name(f'inference_{self.name}/dense_2/BiasAdd:0')
 
         self.step = 0
 
     def _inference(self):
         with tf.variable_scope("inference_"+self.name):
-            layer = tf.layers.dense(self.input, 64, activation=tf.nn.relu)
-            layer = tf.layers.dense(layer, 64, activation=tf.nn.relu)
-            layer = tf.layers.dense(layer, 4)
+            layer = tf.layers.dense(self.input, 128, activation=tf.nn.relu)
+            layer = tf.layers.dense(layer, 128, activation=tf.nn.relu)
+            output = tf.layers.dense(layer, 4)
         return layer
 
     def _training_graph(self):
@@ -50,19 +60,18 @@ class QNetworkTf():
             loss = tf.losses.mean_squared_error(
                 labels=self.y_input, predictions=gathered)
             # loss = tf.multiply(self.loss_modifier, loss)
-            reduced_loss = tf.reduce_mean(loss)
+            loss = tf.reduce_mean(loss, name='loss')
 
             optimize = tf.train.AdamOptimizer(
-                learning_rate=5e-4).minimize(reduced_loss)
+                learning_rate=5e-4).minimize(loss, name='optimize')
 
-
-        return loss, reduced_loss, optimize
+        return loss, optimize
 
     def forward(self, state):
         """Build a network that maps state -> action values."""
         return self.sess.run(self.output, feed_dict={self.input: state})
 
     def train(self, states, y_correct, actions):
-        ls, reduced, result, _ = self.sess.run([self.loss, self.reduced_loss, self.output, self.optimizer], feed_dict={
+        reduced, result, _ = self.sess.run([self.loss, self.output, self.optimizer], feed_dict={
             self.input: states, self.y_input: y_correct, self.gather_index: actions})
-        return ls, reduced, result
+        return reduced, result

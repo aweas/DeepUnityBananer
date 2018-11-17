@@ -1,2 +1,5 @@
-model_checkpoint_path: "model.ckpt"
-all_model_checkpoint_paths: "model.ckpt"
+model_checkpoint_path: "2018-11-17__12-00.ckpt"
+all_model_checkpoint_paths: "2018-11-17__11-55.ckpt"
+all_model_checkpoint_paths: "2018-11-17__11-57.ckpt"
+all_model_checkpoint_paths: "2018-11-17__11-58.ckpt"
+all_model_checkpoint_paths: "2018-11-17__12-00.ckpt"
