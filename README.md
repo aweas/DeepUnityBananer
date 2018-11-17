@@ -23,6 +23,7 @@ Agent was able to solve the environment in as little as 400 episodes.
 Packages:
 - Tensorflow (tested on version 1.12.0)
 - Numpy (tested on 1.14.3)
+- UnityAgents
   
 Additionaly, Jupyter notebook (or Jupyter lab) for displaying solution
 
