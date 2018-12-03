@@ -38,4 +38,4 @@ After downloading, unpack all files and place them in directory `data/`. Then, s
 ```
 env = UnityEnvironment(file_name = "data/Banana.exe")
 ```
-with one proper to your OS.
+with one proper to your OS. Notebook using pytorch implementation is in location `pytorch/Navigation_pytorch.ipynb`, and tensorflow in `tensorflow/Navigation.ipynb`.
