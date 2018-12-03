@@ -3,6 +3,7 @@ from tensorflow.python.saved_model import tag_constants
 import numpy as np
 
 
+
 class QNetworkTf():
     """Actor (Policy) Model."""
 
@@ -75,3 +76,4 @@ class QNetworkTf():
         reduced, result, _ = self.sess.run([self.loss, self.output, self.optimizer], feed_dict={
             self.input: states, self.y_input: y_correct, self.gather_index: actions})
         return reduced, result
+
